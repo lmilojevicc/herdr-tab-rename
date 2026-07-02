@@ -41,6 +41,7 @@ func mkdir(p string) string {
 
 func pidFile() string { return filepath.Join(stateDir(), "herdr-tab-rename.pid") }
 func logFile() string { return filepath.Join(stateDir(), "daemon.log") }
+func locksPath() string { return filepath.Join(stateDir(), "locks.json") }
 
 func socketPath() string {
 	if s := os.Getenv("HERDR_SOCKET_PATH"); s != "" {
@@ -163,6 +164,7 @@ func cmdDaemon() int {
 	if err := d.seed(); err != nil {
 		logger.Printf("seed warning: %v", err)
 	}
+	d.restoreLocks()
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

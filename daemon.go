@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
+	"sort"
 )
 
 type tab struct {
@@ -66,6 +68,72 @@ func (d *daemon) seed() error {
 	return nil
 }
 
+// restoreLocks re-loads persisted locked tabs from disk and re-locks those that
+// still exist as live tabs. Stale ids from a previous Herdr session (different
+// tab_ids) are dropped. Called after seed() so existing tabs are already
+// baselined; this only marks the persisted ones as locked.
+func (d *daemon) restoreLocks() {
+	tabs, err := d.tabList()
+	if err != nil {
+		return
+	}
+	live := make(map[string]bool, len(tabs))
+	for _, t := range tabs {
+		live[t.TabID] = true
+	}
+	for id := range loadLocks() {
+		if live[id] {
+			d.locked[id] = true
+		}
+	}
+	if n := len(d.locked); n > 0 {
+		d.log.Printf("restored %d persisted locked tab(s)", n)
+	}
+}
+
+// loadLocks reads the persisted locked-tab ids. A missing or unparseable file
+// yields an empty map (never an error).
+func loadLocks() map[string]bool {
+	out := map[string]bool{}
+	b, err := os.ReadFile(locksPath())
+	if err != nil {
+		return out
+	}
+	var s struct {
+		LockedTabs []string `json:"locked_tabs"`
+	}
+	if json.Unmarshal(b, &s) != nil {
+		return out
+	}
+	for _, id := range s.LockedTabs {
+		out[id] = true
+	}
+	return out
+}
+
+// saveLocks atomically writes the current locked set to disk.
+func (d *daemon) saveLocks() {
+	ids := make([]string, 0, len(d.locked))
+	for id := range d.locked {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	b, err := json.MarshalIndent(struct {
+		LockedTabs []string `json:"locked_tabs"`
+	}{LockedTabs: ids}, "", "  ")
+	if err != nil {
+		return
+	}
+	tmp := locksPath() + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		d.log.Printf("saveLocks write tmp: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, locksPath()); err != nil {
+		d.log.Printf("saveLocks rename: %v", err)
+	}
+}
+
 func (d *daemon) poll() error {
 	tabs, err := d.tabList()
 	if err != nil {
@@ -97,6 +165,7 @@ func (d *daemon) poll() error {
 		if prev, seen := d.lastSeen[t.TabID]; seen && current != prev && current != desired {
 			d.locked[t.TabID] = true
 			d.log.Printf("locked %s (user renamed to %q)", t.TabID, current)
+			d.saveLocks()
 			continue
 		}
 
