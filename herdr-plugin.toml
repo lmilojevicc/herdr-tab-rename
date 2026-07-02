@@ -6,7 +6,8 @@ description = "Auto-rename each tab to its focused pane's working-directory name
 platforms = ["linux", "macos"]
 
 [[build]]
-command = ["go", "build", "-o", "herdr-tab-rename", "."]
+platforms = ["linux", "macos"]
+command = ["bash", "scripts/install.sh"]
 
 [[actions]]
 id = "start"

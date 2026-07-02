@@ -12,16 +12,24 @@ A [Herdr](https://github.com/lmilojevicc/herdr) plugin that automatically rename
 ## Requirements
 
 - Herdr >= 0.7.0
-- Go (to build from source)
+- curl or wget (one is preinstalled on macOS and Linux)
 - Linux or macOS
+
+Building from source (local development) additionally requires Go.
 
 ## Installation
 
-From the Herdr plugin registry:
+From GitHub (downloads a prebuilt binary — no Go required):
 
 ```sh
 herdr plugin install lmilojevicc/herdr-tab-rename
+# or pin a specific release:
+herdr plugin install lmilojevicc/herdr-tab-rename --ref v0.1.0
 ```
+
+The install step runs `scripts/install.sh`, which downloads the right
+prebuilt binary for your OS/arch from GitHub Releases and verifies its
+SHA256 checksum.
 
 Local development:
 
@@ -30,7 +38,13 @@ go build -o herdr-tab-rename .
 herdr plugin link .
 ```
 
-> `herdr plugin link` registers the plugin from the current directory but does **not** build it — run `go build` first so the `herdr-tab-rename` binary exists.
+> `herdr plugin link` registers the plugin from the current directory but does **not** run the build step — run `go build` first so the `herdr-tab-rename` binary exists.
+
+## Releases
+
+Binaries are built by GitHub Actions (`.github/workflows/release.yml`) on
+every `git tag v*` push and attached to the GitHub Release. Four targets are
+produced: linux/macos × amd64/arm64, plus a `SHA256SUMS` file.
 
 ## How it works
 
