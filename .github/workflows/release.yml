@@ -45,7 +45,7 @@ jobs:
           path: artifacts
       - run: |
           mkdir -p assets
-          find artifacts -name 'herdr-tab-rename-*' -exec mv {} assets/ \;
+          mv artifacts/*/herdr-tab-rename-* assets/
           (cd assets && sha256sum herdr-tab-rename-* > SHA256SUMS)
       - uses: softprops/action-gh-release@v2
         with:
