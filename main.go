@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -20,18 +21,34 @@ const pollInterval = 500 * time.Millisecond
 //
 // os.TempDir is only a last-resort fallback when HOME is unavailable (avoiding
 // the prior per-shell TMPDIR bug that split state across launch contexts).
+// sessionKey derives a stable, filesystem-safe key for the session from its
+// socket path. Named sessions live under .../sessions/<name>/herdr.sock; the
+// default session (or any non-standard path) maps to "default".
+func sessionKey(sock string) string {
+	if i := strings.Index(sock, "/sessions/"); i >= 0 {
+		rest := sock[i+len("/sessions/"):]
+		if j := strings.LastIndex(rest, "/"); j >= 0 {
+			if name := rest[:j]; name != "" {
+				return name
+			}
+		}
+	}
+	return "default"
+}
+
 func stateDir() string {
+	session := sessionKey(socketPath())
 	if d := os.Getenv("HERDR_PLUGIN_STATE_DIR"); d != "" && filepath.IsAbs(d) {
-		return mkdir(d)
+		return mkdir(filepath.Join(d, session))
 	}
 	if x := os.Getenv("XDG_STATE_HOME"); x != "" && filepath.IsAbs(x) {
-		return mkdir(filepath.Join(x, "herdr", "plugins", "herdr-tab-rename"))
+		return mkdir(filepath.Join(x, "herdr", "plugins", "herdr-tab-rename", session))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return mkdir(filepath.Join(os.TempDir(), "herdr-tab-rename"))
+		return mkdir(filepath.Join(os.TempDir(), "herdr-tab-rename", session))
 	}
-	return mkdir(filepath.Join(home, ".local", "state", "herdr", "plugins", "herdr-tab-rename"))
+	return mkdir(filepath.Join(home, ".local", "state", "herdr", "plugins", "herdr-tab-rename", session))
 }
 
 func mkdir(p string) string {
