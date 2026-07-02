@@ -56,9 +56,27 @@ func mkdir(p string) string {
 	return p
 }
 
-func pidFile() string { return filepath.Join(stateDir(), "herdr-tab-rename.pid") }
-func logFile() string { return filepath.Join(stateDir(), "daemon.log") }
+func pidFile() string  { return filepath.Join(stateDir(), "herdr-tab-rename.pid") }
+func logFile() string  { return filepath.Join(stateDir(), "daemon.log") }
 func locksPath() string { return filepath.Join(stateDir(), "locks.json") }
+func lockPath() string { return filepath.Join(stateDir(), "herdr-tab-rename.lock") }
+
+// acquireStartLock takes an exclusive flock on lockPath() so concurrent `start`
+// invocations (e.g. multiple pane.created hooks firing at once) serialize. The
+// returned *os.File must be Closed by the caller to release the lock. On unix
+// it uses syscall.Flock; the lock is automatically released when the process
+// exits, so a crashed start never deadlocks the next one.
+func acquireStartLock() (*os.File, error) {
+	f, err := os.OpenFile(lockPath(), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
 
 func socketPath() string {
 	if s := os.Getenv("HERDR_SOCKET_PATH"); s != "" {
@@ -126,6 +144,13 @@ func run(cmd string) int {
 // background process. Hook commands block until exit, so start returns quickly
 // after detaching.
 func cmdStart() int {
+	lock, err := acquireStartLock()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "cannot acquire start lock:", err)
+		return 1
+	}
+	defer lock.Close()
+
 	if pid, ok := readPid(pidFile()); ok && processAlive(pid) {
 		return 0
 	}
