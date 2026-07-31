@@ -1,4 +1,14 @@
+<div align="center">
+
 # herdr-tab-rename
+
+<p align="center">
+    <em>Check out my other Herdr-related projects.</em> <br>
+    <a href="https://github.com/lmilojevicc/seshagy"><em>Seshagy - Agent aware TUI session manager</em></a>
+    &nbsp; | &nbsp;
+    <a href="https://github.com/lmilojevicc/herdr-splits.nvim"><em>herdr-splits.nvim - Seamless nvim and herdr navigation</em></a>
+</p>
+</div>
 
 A [Herdr](https://github.com/lmilojevicc/herdr) plugin that automatically renames each tab to the basename of its focused pane's current working directory. Tabs you rename manually are left alone for the rest of the session.
 
