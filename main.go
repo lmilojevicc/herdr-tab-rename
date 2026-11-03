@@ -56,10 +56,10 @@ func mkdir(p string) string {
 	return p
 }
 
-func pidFile() string  { return filepath.Join(stateDir(), "herdr-tab-rename.pid") }
-func logFile() string  { return filepath.Join(stateDir(), "daemon.log") }
+func pidFile() string   { return filepath.Join(stateDir(), "herdr-tab-rename.pid") }
+func logFile() string   { return filepath.Join(stateDir(), "daemon.log") }
 func locksPath() string { return filepath.Join(stateDir(), "locks.json") }
-func lockPath() string { return filepath.Join(stateDir(), "herdr-tab-rename.lock") }
+func lockPath() string  { return filepath.Join(stateDir(), "herdr-tab-rename.lock") }
 
 // acquireStartLock takes an exclusive flock on lockPath() so concurrent `start`
 // invocations (e.g. multiple pane.created hooks firing at once) serialize. The

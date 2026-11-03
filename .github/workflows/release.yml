@@ -6,11 +6,37 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # Release builds stay uncached on purpose.
+          cache: false
+      - name: Tag matches herdr-plugin.toml
+        run: |
+          manifest_version="$(awk -F ' *= *' '$1 == "version" { gsub(/"/, "", $2); print $2; exit }' herdr-plugin.toml)"
+          test "${GITHUB_REF_NAME}" = "v${manifest_version}"
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         include:
@@ -23,32 +49,44 @@ jobs:
           - goos: darwin
             goarch: arm64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" \
-            -o herdr-tab-rename-${{ matrix.goos }}-${{ matrix.goarch }} .
-      - uses: actions/upload-artifact@v4
+          cache: false
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags="-s -w" -o "herdr-tab-rename-${GOOS}-${GOARCH}" .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: herdr-tab-rename-${{ matrix.goos }}-${{ matrix.goarch }}
           path: herdr-tab-rename-${{ matrix.goos }}-${{ matrix.goarch }}
+          if-no-files-found: error
+          retention-days: 1
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          path: artifacts
-      - run: |
-          mkdir -p assets
-          mv artifacts/*/herdr-tab-rename-* assets/
-          (cd assets && sha256sum herdr-tab-rename-* > SHA256SUMS)
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            assets/herdr-tab-rename-*
-            assets/SHA256SUMS
+          pattern: herdr-tab-rename-*
+          path: assets
+          merge-multiple: true
+      - name: Checksum and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd assets
+          test "$(find . -maxdepth 1 -type f -name 'herdr-tab-rename-*' | wc -l)" -eq 4
+          sha256sum herdr-tab-rename-* > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" herdr-tab-rename-* SHA256SUMS \
+            --verify-tag --generate-notes --repo "$GITHUB_REPOSITORY"
